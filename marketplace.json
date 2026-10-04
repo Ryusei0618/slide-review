@@ -1,0 +1,18 @@
+{
+  "name": "slide-review",
+  "plugins": [
+    {
+      "name": "slide-review",
+      "source": "./slide-review",
+      "version": "0.1.0",
+      "description": "PPT 逐页审阅页：把课件渲染图铺成本地网页，在图上点选元素直接改（文字/字号/颜色/位置大小/替换图片/删除）、四种标注形态提意见、逐帧播放器看动画并对帧提意见，改动应用直接写回 pptx（备份+渲染diff保护+可撤销），交付即带前后对比。",
+      "displayName": "Slide Review",
+      "displayName_i18n": {
+        "zh-CN": "逐页审阅页"
+      },
+      "description_i18n": {
+        "zh-CN": "PPT 审阅页：渲染图铺成网页，点选直改/标注提意见/逐帧看动画，应用写回课件可撤销"
+      }
+    }
+  ]
+}

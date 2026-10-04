@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>逐页审阅 · 圈选提意见 · 直接改</title>
+<style>
+  :root { --orange:#E86A10; --blue:#1E6FD9; --ink:#22252B; --grey:#7A8089; --bg:#F4F5F7; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font-family:"Microsoft YaHei","Segoe UI",sans-serif; }
+  header { position:sticky; top:0; z-index:20; background:#17191E; color:#F5F6F8;
+           padding:12px 22px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:16.5px; margin:0; font-weight:600; }
+  header .meta { font-size:12.5px; color:#9AA0AB; }
+  header button { background:var(--orange); color:#fff; border:0; border-radius:6px;
+                  padding:9px 16px; font-size:13.5px; cursor:pointer; font-family:inherit; }
+  header button.ghost { background:#2C333D; margin-left:auto; margin-right:14px; }
+  header button:hover { filter:brightness(1.1); }
+  .tools { display:flex; gap:4px; background:#2C333D; border-radius:6px; padding:3px; }
+  .tools button { background:transparent; border:0; border-radius:4px; color:#C6CBD4;
+                  padding:5px 10px; font-size:12.5px; cursor:pointer; font-family:inherit;
+                  line-height:1; }
+  .tools button.on { background:var(--orange); color:#fff; font-weight:600; }
+  main { max-width:1180px; margin:0 auto; padding:20px 18px 90px; }
+  .hint { font-size:13px; color:var(--grey); line-height:1.75; margin:0 0 18px;
+          background:#fff; border-radius:8px; padding:14px 18px;
+          box-shadow:0 1px 3px rgba(0,0,0,.07); }
+  .hint b { color:var(--ink); }
+  .foot { text-align:center; font-size:12.5px; color:#9AA0AB; padding:6px 0 30px; }
+  .card { background:#fff; border-radius:10px; margin-bottom:26px; overflow:hidden;
+          box-shadow:0 1px 3px rgba(0,0,0,.09); }
+  .card-head { display:flex; align-items:baseline; gap:14px; padding:13px 20px;
+               border-bottom:1px solid #EDEFF2; flex-wrap:wrap; }
+  .pno { background:#17191E; color:#fff; border-radius:6px; padding:3px 11px;
+         font-size:13px; font-weight:600; }
+  .ptitle { font-size:15.5px; font-weight:600; }
+  .panim { font-size:12.5px; color:var(--grey); padding:12px 20px; line-height:1.6;
+           border-top:1px solid #EDEFF2; }
+  .shotwrap { position:relative; line-height:0; background:#000; user-select:none; }
+  .shot { display:block; width:100%; pointer-events:none; }
+  .layer { position:absolute; inset:0; cursor:crosshair; }
+  .box { position:absolute; border:2px solid var(--orange); background:rgba(232,106,16,.16);
+         border-radius:2px; }
+  .box.draw { border-style:dashed; background:rgba(232,106,16,.1); }
+  .box.ellipse { border-radius:50%; }
+  .box.arrow, .box.penhit { border:0; background:transparent; }
+  .box.arrow:hover, .box.penhit:hover { outline:1.5px dashed rgba(232,106,16,.6); }
+  .arrowline { position:absolute; height:3px; background:var(--orange); border-radius:2px;
+               transform-origin:0 50%; pointer-events:none; }
+  .arrowhead { position:absolute; width:0; height:0; border-top:6px solid transparent;
+               border-bottom:6px solid transparent; border-left:11px solid var(--orange);
+               transform-origin:0 50%; pointer-events:none; }
+  svg.pensvg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  svg.pensvg polyline { fill:none; stroke:var(--orange); stroke-width:2.5; stroke-linecap:round;
+                        stroke-linejoin:round; vector-effect:non-scaling-stroke; }
+  svg.pensvg polyline.draw { opacity:.65; }
+  .box .head { position:absolute; top:-11px; left:-2px; display:flex; gap:5px;
+               align-items:center; }
+  .box .tag { background:var(--orange); color:#fff;
+              font-size:11.5px; line-height:1; padding:3px 7px; border-radius:4px;
+              font-weight:600; white-space:nowrap; }
+  .box .del { width:22px; height:22px;
+              border-radius:50%; background:#17191E; color:#fff; border:2px solid #fff;
+              font-size:13px; line-height:1; cursor:pointer; display:flex;
+              align-items:center; justify-content:center; padding:0; }
+  .box .del:hover { background:#C0392B; }
+  .sel { position:absolute; border:2.5px solid var(--blue); border-radius:3px;
+         box-shadow:0 0 0 3px rgba(30,111,217,.22); pointer-events:auto;
+         cursor:move; touch-action:none; min-width:8px; min-height:8px; }
+  .sel.thin { min-width:26px; min-height:14px; }   /* 线形：视觉框加厚到可抓握，仅移动 */
+  .sel .h { position:absolute; width:12px; height:12px; background:#fff;
+            border:2px solid var(--blue); border-radius:2px; }
+  .sel .h[data-h=nw]{ left:-7px;  top:-7px;         cursor:nwse-resize; }
+  .sel .h[data-h=n] { left:calc(50% - 6px); top:-7px; cursor:ns-resize; }
+  .sel .h[data-h=ne]{ right:-7px; top:-7px;         cursor:nesw-resize; }
+  .sel .h[data-h=e] { right:-7px; top:calc(50% - 6px); cursor:ew-resize; }
+  .sel .h[data-h=se]{ right:-7px; bottom:-7px;      cursor:nwse-resize; }
+  .sel .h[data-h=s] { left:calc(50% - 6px); bottom:-7px; cursor:ns-resize; }
+  .sel .h[data-h=sw]{ left:-7px;  bottom:-7px;      cursor:nesw-resize; }
+  .sel .h[data-h=w] { left:-7px;  top:calc(50% - 6px); cursor:ew-resize; }
+  .pvbadge { position:absolute; top:10px; right:10px; z-index:6; border:0; cursor:pointer;
+             background:rgba(23,25,30,.82); color:#fff; font-size:12px; font-family:inherit;
+             border-radius:6px; padding:6px 11px; display:none; line-height:1.4; }
+  .pvbadge.on { display:block; }
+  .pvbadge:hover { background:rgba(23,25,30,.95); }
+  #pvstat { position:fixed; left:14px; bottom:14px; z-index:45; background:rgba(23,25,30,.85);
+            color:#fff; font-size:12.5px; border-radius:6px; padding:8px 13px; display:none; }
+  #pvstat.on { display:block; }
+  .annots { padding:6px 20px 4px; }
+  .annot { border-left:3px solid var(--orange); background:#FFF8F2; border-radius:0 6px 6px 0;
+           padding:10px 13px; margin:10px 0; }
+  .annot .row1 { font-size:12.5px; color:var(--grey); line-height:1.6; }
+  .annot .row1 b { color:var(--ink); }
+  .annot .hits { font-size:12px; color:#4A5058; margin:5px 0 7px; line-height:1.65;
+                 word-break:break-all; }
+  .annot .hits code { background:#F1F3F6; border-radius:3px; padding:1px 5px;
+                      font-family:Consolas,monospace; font-size:11.5px; }
+  .annot textarea { width:100%; min-height:48px; resize:vertical; border:1px solid #E2D6C8;
+                    border-radius:5px; padding:8px 10px; font-size:13.5px;
+                    font-family:inherit; color:var(--ink); line-height:1.6; background:#fff; }
+  .annot textarea:focus { outline:2px solid #FFD9B8; border-color:var(--orange); }
+  .note { padding:6px 20px 18px; display:flex; gap:12px; align-items:flex-start; }
+  .note textarea { flex:1; min-height:50px; resize:vertical; border:1px solid #D8DCE2;
+                   border-radius:6px; padding:9px 11px; font-size:13.5px;
+                   font-family:inherit; color:var(--ink); line-height:1.55; }
+  .note textarea:focus { outline:2px solid #FFD9B8; border-color:var(--orange); }
+  .note .tag { font-size:12.5px; color:var(--grey); padding-top:11px; white-space:nowrap; }
+  /* ---------- 编辑面板 / 改动清单 ---------- */
+  .panel { position:fixed; top:64px; right:16px; width:352px; max-height:calc(100vh - 84px);
+           overflow:auto; background:#fff; border-radius:10px; z-index:40;
+           box-shadow:0 6px 28px rgba(0,0,0,.22); display:none; font-size:13px; }
+  .panel.on { display:block; }
+  .panel h3 { margin:0; padding:12px 16px; font-size:14px; border-bottom:1px solid #EDEFF2;
+              display:flex; align-items:center; gap:8px; }
+  .panel h3 .x { margin-left:auto; cursor:pointer; color:var(--grey); font-size:16px;
+                 border:0; background:none; padding:2px 6px; }
+  .panel h3 .x:hover { color:var(--ink); }
+  .panel .bd { padding:12px 16px 14px; }
+  .pinfo { font-size:12px; color:var(--grey); line-height:1.7; background:#F6F7F9;
+           border-radius:6px; padding:8px 10px; margin-bottom:10px; word-break:break-all; }
+  .pinfo code { background:#ECEEF2; border-radius:3px; padding:0 5px;
+                font-family:Consolas,monospace; }
+  .frow { display:flex; gap:8px; align-items:center; margin:9px 0; flex-wrap:wrap; }
+  .frow label { font-size:12.5px; color:var(--grey); min-width:56px; }
+  .frow input[type=text], .frow input[type=number], .frow select {
+      flex:1; min-width:52px; border:1px solid #D8DCE2; border-radius:5px;
+      padding:6px 8px; font-size:13px; font-family:inherit; color:var(--ink); }
+  .frow input:focus, .panel textarea:focus { outline:2px solid #CFE2FA; border-color:var(--blue); }
+  .panel textarea { width:100%; min-height:64px; resize:vertical; border:1px solid #D8DCE2;
+                    border-radius:5px; padding:8px 10px; font-size:13.5px;
+                    font-family:inherit; color:var(--ink); line-height:1.6; }
+  .cur { font-size:11.5px; color:#9AA0AB; margin:2px 0 6px; line-height:1.6;
+         word-break:break-all; }
+  .panel .btns { display:flex; gap:10px; margin-top:12px; }
+  .panel .btns button { flex:1; border:0; border-radius:6px; padding:9px 0;
+                        font-size:13.5px; cursor:pointer; font-family:inherit; }
+  .panel .ok { background:var(--blue); color:#fff; }
+  .panel .off { background:#EDEFF2; color:var(--ink); }
+  .panel .dim { color:var(--grey); font-size:12px; line-height:1.7; }
+  #traybox .item { border-left:3px solid var(--blue); background:#F4F8FE; border-radius:0 6px 6px 0;
+                   padding:8px 10px; margin:8px 0; font-size:12.5px; line-height:1.6; }
+  #traybox .item.note { border-left-color:var(--orange); background:#FFF8F2; }
+  #traybox .item.note .k { color:var(--orange); font-weight:600; }
+  #traybox .sec { font-size:12px; color:var(--grey); margin:10px 0 2px; font-weight:600; }
+  #traybox .item .d { color:var(--ink); word-break:break-all; }
+  #traybox .item .m { color:var(--grey); font-size:11.5px; }
+  #traybox .item .x { float:right; cursor:pointer; border:0; background:none;
+                      color:var(--grey); font-size:14px; padding:0 2px; }
+  #traybox .item .x:hover { color:var(--orange); }
+  #traybox .empty { color:#9AA0AB; font-size:12.5px; text-align:center; padding:16px 0; }
+  /* ---------- 应用遮罩 ---------- */
+  #mask { position:fixed; inset:0; background:rgba(23,25,30,.66); display:none;
+          align-items:center; justify-content:center; z-index:55; padding:30px; }
+  #mask.on { display:flex; }
+  #mask .box2 { background:#fff; border-radius:10px; width:min(640px,100%);
+                max-height:100%; display:flex; flex-direction:column; overflow:hidden; }
+  #mask h2 { margin:0; padding:15px 20px; font-size:15px; border-bottom:1px solid #EDEFF2; }
+  #mask .body { padding:16px 20px; overflow:auto; font-size:13px; line-height:1.8; }
+  #mask .spin { display:inline-block; width:14px; height:14px; border:2.5px solid #CFE2FA;
+                border-top-color:var(--blue); border-radius:50%; animation:sp 0.8s linear infinite;
+                vertical-align:-2px; margin-right:8px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  #mask .res { margin:2px 0; padding:6px 10px; border-radius:6px; background:#F6F7F9;
+               font-size:12.5px; line-height:1.7; }
+  #mask .res.bad { background:#FDECEC; }
+  #mask .bar { padding:12px 20px; border-top:1px solid #EDEFF2; display:flex; gap:10px;
+               justify-content:flex-end; }
+  #mask .bar button { border:0; border-radius:6px; padding:9px 16px; font-size:13.5px;
+                      cursor:pointer; font-family:inherit; }
+  #mask .ok { background:var(--orange); color:#fff; }
+  #mask .off { background:#EDEFF2; color:var(--ink); }
+  #out { position:fixed; inset:0; background:rgba(23,25,30,.66); display:none;
+         align-items:center; justify-content:center; z-index:50; padding:30px; }
+  #out.on { display:flex; }
+  #out .box2 { background:#fff; border-radius:10px; width:min(860px,100%); max-height:100%;
+               display:flex; flex-direction:column; overflow:hidden; }
+  #out h2 { margin:0; padding:15px 20px; font-size:15px; border-bottom:1px solid #EDEFF2; }
+  #out textarea { border:0; padding:16px 20px; font-size:13px; line-height:1.7; flex:1;
+                  min-height:380px; resize:none; font-family:Consolas,"Microsoft YaHei",monospace; }
+  #out .bar { padding:12px 20px; border-top:1px solid #EDEFF2; display:flex; gap:10px;
+              justify-content:flex-end; }
+  #out .bar button { border:0; border-radius:6px; padding:9px 16px; font-size:13.5px;
+                     cursor:pointer; font-family:inherit; }
+  #out .ok { background:var(--orange); color:#fff; }
+  #out .off { background:#EDEFF2; color:var(--ink); }
+  #light { position:fixed; inset:0; background:rgba(0,0,0,.92); display:none; z-index:60;
+           cursor:zoom-out; padding:14px; }
+  #light.on { display:flex; align-items:center; justify-content:center; }
+  #light img { max-width:100%; max-height:100%; }
+  /* ---------- 意见侧栏（编号图钉联动） ---------- */
+  #sidenav { position:fixed; top:64px; left:16px; width:308px; max-height:calc(100vh - 84px);
+             overflow:auto; background:#fff; border-radius:10px; z-index:40;
+             box-shadow:0 6px 28px rgba(0,0,0,.22); display:none; font-size:13px; }
+  #sidenav.on { display:block; }
+  #sidenav h3 { margin:0; padding:12px 16px; font-size:14px; border-bottom:1px solid #EDEFF2;
+                display:flex; align-items:center; gap:8px; position:sticky; top:0;
+                background:#fff; }
+  #sidenav h3 .x { margin-left:auto; cursor:pointer; color:var(--grey); font-size:16px;
+                   border:0; background:none; padding:2px 6px; }
+  #sidenav h3 .x:hover { color:var(--ink); }
+  #sidenav .bd { padding:8px 12px 14px; }
+  #sidenav .sec { font-size:12px; color:var(--grey); margin:10px 0 4px; font-weight:600; }
+  #sidenav .item { display:flex; gap:8px; align-items:flex-start; padding:7px 9px; margin:4px 0;
+                   border-radius:6px; cursor:pointer; border:1px solid transparent; }
+  #sidenav .item:hover { background:#F6F7F9; }
+  #sidenav .item .no { background:var(--orange); color:#fff; border-radius:4px; font-size:11px;
+                       font-weight:600; padding:2px 6px; white-space:nowrap; margin-top:1px; }
+  #sidenav .item.page .no { background:#5A6472; }
+  #sidenav .item.elem .no { background:var(--blue); }
+  #sidenav .item .tx { flex:1; line-height:1.5; word-break:break-all; }
+  #sidenav .empty { color:#9AA0AB; font-size:12.5px; text-align:center; padding:16px 0; }
+  @keyframes flashA { 0%,100% { box-shadow:0 0 0 0 rgba(30,111,217,0); }
+                      50%     { box-shadow:0 0 0 7px rgba(30,111,217,.5); } }
+  @keyframes flashO { 0%,100% { box-shadow:0 0 0 0 rgba(232,106,16,0); }
+                      50%     { box-shadow:0 0 0 4px rgba(232,106,16,.65); } }
+  .box.flash, .box.tmp { animation:flashA .5s ease-in-out 3; z-index:5; }
+  .box.tmp { border-color:var(--blue); background:rgba(30,111,217,.12); }
+  #sidenav .item.flash { animation:flashO .5s ease-in-out 3; }
+  /* 已处理意见：图上虚线灰、侧栏划线半透明沉底 */
+  .box.done { border-style:dashed; border-color:#8A929D; background:rgba(122,128,137,.10); }
+  .box.done .tag { background:#8A929D; }
+  #sidenav .item.done { opacity:.45; }
+  #sidenav .item.done .tx { text-decoration:line-through; }
+  #sidenav .ck { width:16px; height:16px; border:1.5px solid #B8BEC7; border-radius:50%;
+                 background:#fff; cursor:pointer; flex:0 0 16px; margin-top:1px;
+                 font-size:10px; line-height:1; color:#fff; padding:0; }
+  #sidenav .item.done .ck { background:#3A9B5C; border-color:#3A9B5C; }
+  /* ---------- 帧播放器 ---------- */
+  .fbar { display:flex; align-items:center; gap:8px; padding:9px 20px; background:#F6F7F9;
+          border-top:1px solid #EDEFF2; flex-wrap:wrap; font-size:12.5px; }
+  .fbar button { border:1px solid #D8DCE2; background:#fff; border-radius:5px;
+                 padding:4px 9px; font-size:12px; cursor:pointer; font-family:inherit; }
+  .fbar button.on { background:var(--orange); color:#fff; border-color:var(--orange); }
+  .fbar input[type=range] { flex:1; min-width:120px; accent-color:var(--orange); }
+  .fbar .flabel { color:var(--grey); min-width:110px; }
+  .fbar .fx { margin-left:auto; color:var(--grey); cursor:pointer; border:0;
+              background:none; font-size:14px; padding:2px 4px; }
+  .fbar .fx:hover { color:var(--ink); }
+  /* ---------- 应用前后对比 ---------- */
+  #cmp { position:fixed; inset:0; background:rgba(23,25,30,.9); display:none; z-index:70;
+         flex-direction:column; }
+  #cmp.on { display:flex; }
+  #cmp .bar { display:flex; align-items:center; gap:10px; padding:10px 16px; color:#F5F6F8;
+              flex-wrap:wrap; }
+  #cmp .bar button { border:0; border-radius:6px; padding:7px 13px; font-size:13px;
+                     cursor:pointer; font-family:inherit; background:#2C333D; color:#F5F6F8; }
+  #cmp .bar button.on { background:var(--orange); }
+  #cmp .bar .x { margin-left:auto; background:transparent; font-size:18px; padding:2px 8px; }
+  #cmp .wrap { flex:1; display:flex; gap:14px; padding:0 16px 16px; min-height:0; }
+  #cmp .col { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #cmp .col .lab { text-align:center; font-size:12.5px; color:#9AA0AB; padding:2px 0 8px; }
+  #cmp .col .imgbox { flex:1; display:flex; align-items:center; justify-content:center;
+                      background:#0E1013; border-radius:8px; overflow:hidden; min-height:0; }
+  #cmp .col img { max-width:100%; max-height:100%; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="deck"></h1>
+  <span class="meta">点元素直接改 · 标注提意见 · 应用改动直接写回课件</span>
+  <div class="tools" id="tools">
+    <button data-tool="rect" class="on" title="拖拽画矩形框">▭ 框选</button>
+    <button data-tool="arrow" title="从起点拖到终点，指向要改的位置">↗ 箭头</button>
+    <button data-tool="pen" title="按住随手画，圈不规则区域">✎ 画笔</button>
+    <button data-tool="ellipse" title="拖拽画椭圆圈选">◯ 椭圆</button>
+  </div>
+  <button class="ghost" onclick="clearAll()">清空全部标注</button>
+  <button class="ghost" id="sidebtn" style="margin-left:0" onclick="toggleSide()">意见列表 (0)</button>
+  <button id="traybtn" onclick="toggleTray()">改动清单 (0)</button>
+  <button onclick="makeText()">生成意见汇总</button>
+</header>
+
+<main>
+  <p class="hint">
+    <b>直接改</b>：在页面上<b>单击某个元素</b>（文字框 / 图片 / 组合），右侧打开编辑面板——改文字、字号、
+    加粗、颜色、位置大小，点「加入改动清单」，攒够后点顶部<b>改动清单 → 应用全部改动</b>，
+    会直接写回课件文件并自动重渲染本页（渲染约几十秒，期间别关页面）。<br>
+    <b>拖拽改位置大小</b>：选中元素后，<b>拖动蓝色选中框</b>即可移动，<b>拖四角 / 四边白色手柄</b>即可缩放，
+    松手后数值自动填进右侧面板，再点「加入改动清单」确认。<br>
+    <b>实时预览</b>：拖拽松手或改动数值后约 1 秒，页面会自动渲染出<b>真实的预览效果</b>（写的是临时副本，
+    不碰课件原件），图上角标可一键还原；满意后照常「应用改动」写回。<br>
+    <b>对元素提意见</b>：编辑面板最下方的「意见」框写一句话（公式改法、动画要求、配色想法等），
+    会进「改动清单」的意见分区，不自动应用，「生成意见汇总」时一并带上元素 id 发我。<br>
+    <b>撤销</b>：每次应用都有备份，应用后或托盘里可「撤销最近一次应用」，应用后还能看<b>前后对比</b>（改了哪几页、改前改后并排看）。
+    <b>提意见</b>：也可以在图上<b>标注</b>后写一句话——顶栏可换标注工具：<b>▭ 框选</b>圈区域（默认）、
+    <b>↗ 箭头</b>从原因拖向结果指方向（「这条轨迹画错了」）、<b>✎ 画笔</b>随手圈不规则形状、
+    <b>◯ 椭圆</b>精确圈选；标注按 <b>P页-序</b> 全局编号，点顶部「意见列表」集中查看、点条目跳到对应位置，
+    意见汇总里箭头会带上「起点→终点」方向信息发我。<br>
+    <b>看动画</b>：有动画的页在击序说明下方有<b>逐帧播放器</b>——播放或拖滑块逐帧看点击后的画面变化，
+    滑到哪一帧就在右边输入框写意见（回车添加），汇总里自动带上帧号发我。
+    <b>已处理</b>：意见列表里点条目左侧的圆圈可标记「已处理」，已处理的划线沉底、不再进汇总。<br>
+    <b>替换图片 / 删除</b>：点选图片元素可在面板里<b>上传本地图替换</b>（保位置尺寸）；任何元素面板里可<b>删除此形状</b>（应用时移除，动画引用一并清理，可撤销）。<br>
+    <b>缩放</b>：图片上双击可看大图；整页意见写在每页最下方的「整页意见」里。<br>
+    <b>保存</b>：标注、编辑与改动清单都存在本浏览器里，刷新不丢；换浏览器或换机器则看不到。
+  </p>
+  <div id="list"></div>
+  <div class="foot">
+    填写内容只存在本浏览器，刷新不丢；换浏览器或换机器则看不到。
+  </div>
+</main>
+
+<div class="panel" id="editor"></div>
+
+<div class="panel" id="traybox">
+  <h3>改动清单<span class="cnt" id="traycnt"></span><button class="x" onclick="hide('traybox')">✕</button></h3>
+  <div class="bd">
+    <div id="traylist"></div>
+    <div class="btns">
+      <button class="off" onclick="hide('traybox')">继续浏览</button>
+      <button class="ok" onclick="applyAll()">应用全部改动</button>
+    </div>
+    <div id="revertline" style="display:none; margin-top:10px">
+      <button class="off" style="width:100%; border:0; border-radius:6px; padding:8px 0;
+              font-size:12.5px; cursor:pointer; font-family:inherit"
+              onclick="revertLast()">↩ 撤销最近一次应用（恢复到应用前）</button>
+    </div>
+    <div id="cmpline" style="display:none; margin-top:10px">
+      <button class="off" style="width:100%; border:0; border-radius:6px; padding:8px 0;
+              font-size:12.5px; cursor:pointer; font-family:inherit"
+              onclick="openCompare()">◁▷ 查看最近一次应用的前后对比</button>
+    </div>
+    <p class="dim" style="margin-bottom:0">应用 = 直接写回课件文件并重渲染；公式、动画等复杂改动请改用拖拽画框提意见。</p>
+  </div>
+</div>
+
+<div id="mask"><div class="box2">
+  <h2 id="masktitle">应用改动</h2>
+  <div class="body" id="maskbody"></div>
+  <div class="bar" id="maskbar" style="display:none">
+    <button class="off" id="revertbtn" style="display:none" onclick="revertLast()">撤销本次应用</button>
+    <button class="off" id="cmpbtn" style="display:none" onclick="openCompare()">前后对比</button>
+    <button class="off" onclick="maskBack()">返回修改</button>
+    <button class="ok" onclick="location.reload()">刷新查看</button>
+  </div>
+</div></div>
+
+<div id="pvstat"></div>
+
+<div id="out"><div class="box2">
+  <h2>意见汇总 · 复制后发我</h2>
+  <textarea id="outtext" readonly></textarea>
+  <div class="bar">
+    <button class="off" onclick="document.getElementById('out').classList.remove('on')">关闭</button>
+    <button class="ok" onclick="copyOut()">复制全部</button>
+  </div>
+</div></div>
+
+<div id="sidenav">
+  <h3>意见列表<span style="font-size:12px;color:var(--grey)" id="sidecnt"></span>
+    <button class="x" onclick="hide('sidenav')">✕</button></h3>
+  <div class="bd" id="sidelist"></div>
+</div>
+
+<div id="cmp">
+  <div class="bar"><b id="cmptitle">应用前后对比</b><span id="cmppages"
+       style="display:flex;gap:8px;flex-wrap:wrap"></span>
+    <button class="x" onclick="hide('cmp')">✕</button></div>
+  <div class="wrap">
+    <div class="col" id="cmpcolB"><div class="lab">应用前（该次应用前状态）</div>
+      <div class="imgbox"><img id="cmpB" alt="应用前"></div></div>
+    <div class="col" id="cmpcolA"><div class="lab">应用后（当前课件）</div>
+      <div class="imgbox"><img id="cmpA" alt="应用后"></div></div>
+  </div>
+</div>
+
+<div id="light" onclick="this.classList.remove('on')"><img id="lightimg" src=""></div>
+
+<script>
+const D = /*__DATA__*/;
+const PX = D.px, PY = D.py;            // 每英寸像素数
+const IW = D.sw * PX, IH = D.sh * PY;  // 渲染图像素宽高
+const pct2px = (pct, span) => pct / 100 * span;
+const PAGES = D.pages, SHAPES = D.shapes;
+const DOCX = D.kind === 'docx';        // docx 模式：流式版面，禁拖拽、无位置大小
+const K_NOTE = 'ppt_review_notes::' + D.key;
+const K_BOX  = 'ppt_review_boxes::' + D.key;
+const K_CHG  = 'ppt_review_changes::' + D.key;
+const K_ENOTE = 'ppt_review_enotes::' + D.key;
+const K_EDIT = 'ppt_review_edits::' + D.key;
+const K_LASTCMP = 'ppt_review_lastcmp::' + D.key;   // 最近一次应用的前后对比留存 {ts, cmp, pages}
+const K_FNOTE = 'ppt_review_fnotes::' + D.key;      // 帧意见 [{page, fr(帧id), label, txt, done, cid}]
+
+const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(d)); } catch (e) { return d; } };
+let notes = load(K_NOTE, {});
+let boxes = load(K_BOX, {});
+let changes = load(K_CHG, []);
+let enotes = load(K_ENOTE, []);
+let fnotes = load(K_FNOTE, []);      // 帧意见
+let edits = load(K_EDIT, {});        // 未应用的位置/大小编辑：{page: {shapeId: {x,y,w,h} 渲染像素}}
+const saveEdit = () => localStorage.setItem(K_EDIT, JSON.stringify(edits));
+const saveNote = () => localStorage.setItem(K_NOTE, JSON.stringify(notes));
+const saveBox  = () => localStorage.setItem(K_BOX, JSON.stringify(boxes));
+const saveChg  = () => localStorage.setItem(K_CHG, JSON.stringify(changes));
+const saveEnote = () => localStorage.setItem(K_ENOTE, JSON.stringify(enotes));
+const saveFnote = () => localStorage.setItem(K_FNOTE, JSON.stringify(fnotes));
+const clamp = v => Math.max(0, Math.min(100, v));
+const pad2 = n => String(n).padStart(2, '0');
+const boxNo = (page, i) => 'P' + page + '-' + (i + 1);   // 意见全局编号（drawPage 构建期就要用）
+const escHtml = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');   // renderSide 构建期即被 drawPage 调用，须先于其初始化
+const toIn = (pct, total) => pct / 100 * total;
+const padBoxPct = (x, y, w, h, padPx) => {   // % 空间包围盒按像素外扩（x/y 方向物理密度不同）
+  const px = padPx / IW * 100, py = padPx / IH * 100;
+  return [Math.max(0, x - px), Math.max(0, y - py),
+          Math.min(100, x + w + px) - Math.max(0, x - px),
+          Math.min(100, y + h + py) - Math.max(0, y - py)];
+};
+// 箭头的角度/长度在渲染像素空间算（% 空间宽高比非 1，直接 atan2/hypot 方向会歪）；
+// 长度必须输出为「相对图层宽度的百分比」——固定 px 按 1600 宽算出后，在更窄的显示宽度
+// 里线会被拉长 1.4 倍穿过头部（实测 bug）。图层宽高比恒等于渲染图，故该百分比普适
+const arrowLenPct = (x0, y0, x1, y1) => Math.hypot(x1 - x0, (y1 - y0) * IH / IW);
+const arrowAng = (x0, y0, x1, y1) =>
+  Math.atan2((y1 - y0) * IH, (x1 - x0) * IW) * 180 / Math.PI;
+// 帧播放器条 HTML——页卡构建循环就会调用，必须先于其初始化（TDZ 教训同 escHtml）
+const frameBarHtml = (no, frs) => `
+  <div class="fbar" data-page="${no}">
+    <button class="fplay">▶ 逐帧播放</button>
+    <button class="fstep" data-d="-1" title="上一帧">‹</button>
+    <button class="fstep" data-d="1" title="下一帧">›</button>
+    <input type="range" min="0" max="${frs.length - 1}" value="0" step="1">
+    <span class="flabel">正式渲染图</span>
+    <button class="fx" title="还原正式渲染图">✕</button>
+    <input type="text" class="fnote" style="flex:1; min-width:150px; border:1px solid #D8DCE2;
+           border-radius:5px; padding:5px 8px; font-size:12.5px; font-family:inherit"
+           placeholder="对当前帧提意见（动画节奏/效果），回车添加">
+  </div>`;
+const frameList = page => (D.frames && D.frames[page]) || [];
+
+const TAG_CN = { sp: '文本/形状', pic: '图片', graphicFrame: '表格/图表', grpSp: '组合' };
+const area = s => s[3] * s[4];
+const label = s => s[6] ? '「' + s[6] + '」' : (s[5] || '图形');
+
+/* ---------- 生效几何：课件现状 + 未应用的拖拽/手输编辑（命中与选中都跟它走） ---------- */
+function effGeom(page, s) {
+  const e = (edits[page] || {})[s[0]];
+  return e ? [s[0], e.x, e.y, e.w, e.h, ...s.slice(5)] : s;
+}
+function clearEdits(page, ids) {
+  if (page == null) { edits = {}; }
+  else if (!ids) { delete edits[page]; }
+  else {
+    ids.forEach(id => { if (edits[page]) delete edits[page][id]; });
+    if (edits[page] && !Object.keys(edits[page]).length) delete edits[page];
+  }
+  saveEdit();
+}
+
+/* ---------- 元素命中：先取中心在框内的，为空再退化到相交 ---------- */
+function hits(no, b) {
+  const x0 = pct2px(b.x, IW), y0 = pct2px(b.y, IH);
+  const x1 = pct2px(b.x + b.w, IW), y1 = pct2px(b.y + b.h, IH);
+  const list = (SHAPES[no] || []).map(s => effGeom(no, s));
+  const inside = s => {
+    const cx = s[1] + s[3] / 2, cy = s[2] + s[4] / 2;
+    return cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1;
+  };
+  const overlap = s => !(s[1] + s[3] < x0 || s[1] > x1 || s[2] + s[4] < y0 || s[2] > y1);
+  const r = list.filter(inside);
+  return r.length ? r : list.filter(overlap);
+}
+
+/* ---------- 构建页面 ---------- */
+document.getElementById('deck').textContent = D.title + ' · 逐页审阅';
+const list = document.getElementById('list');
+PAGES.forEach(p => {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="card-head">
+      <span class="pno">第 ${p.no} 页</span><span class="ptitle">${p.title}</span>
+    </div>
+    <div class="shotwrap" data-page="${p.no}">
+      <img class="shot" src="img/slide${pad2(p.no)}.png?v=${D.v || 0}" alt="第 ${p.no} 页">
+      <div class="layer" data-page="${p.no}"></div>
+      <button class="pvbadge" onclick="restorePreview(${p.no})"></button>
+    </div>
+    <div class="panim">${p.anim}</div>
+    ${(D.frames && D.frames[p.no]) ? frameBarHtml(p.no, D.frames[p.no]) : ''}
+    <div class="annots" data-page="${p.no}"></div>
+    <div class="note">
+      <span class="tag">整页意见</span>
+      <textarea data-note="${p.no}" placeholder="第 ${p.no} 页整体：……"></textarea>
+    </div>`;
+  list.appendChild(card);
+});
+
+document.querySelectorAll('textarea[data-note]').forEach(t => {
+  const p = t.dataset.note;
+  t.value = notes[p] || '';
+  t.addEventListener('input', () => { notes[p] = t.value.trim(); saveNote(); renderSide(); });
+});
+
+/* ---------- 帧播放器（--frames 生成的帧序列；切帧 = 换图，意见自动带帧号） ---------- */
+function setFrame(page, idx) {
+  const frs = frameList(page);
+  if (!frs.length) return;
+  const bar = document.querySelector(`.fbar[data-page="${page}"]`);
+  const img = document.querySelector(`.shotwrap[data-page="${page}"] .shot`);
+  const idxC = Math.max(0, Math.min(idx, frs.length - 1));
+  const fr = frs[idxC];
+  img.src = `frames/slide${pad2(page)}_${fr.id}.png`;
+  bar.dataset.active = '1';
+  bar.querySelector('input[type=range]').value = idxC;
+  bar.querySelector('.flabel').textContent = `帧 ${idxC + 1}/${frs.length} · ${fr.label}`;
+  bar.querySelector('.fplay').textContent = '❚❚ 停止';
+}
+function restoreShot(page) {
+  const bar = document.querySelector(`.fbar[data-page="${page}"]`);
+  const img = document.querySelector(`.shotwrap[data-page="${page}"] .shot`);
+  if (img) img.src = `img/slide${pad2(page)}.png?v=${D.v || 0}`;
+  if (bar) {
+    bar.dataset.active = '0';
+    bar.querySelector('.flabel').textContent = '正式渲染图';
+    bar.querySelector('.fplay').textContent = '▶ 逐帧播放';
+    stopPlay(page);
+  }
+}
+const playTimers = {};
+function stopPlay(page) {
+  if (playTimers[page]) { clearInterval(playTimers[page]); delete playTimers[page]; }
+}
+document.querySelectorAll('.fbar').forEach(bar => {
+  const page = +bar.dataset.page, frs = frameList(page);
+  const rng = bar.querySelector('input[type=range]');
+  bar.querySelector('.fplay').onclick = () => {
+    if (playTimers[page]) { stopPlay(page); bar.querySelector('.fplay').textContent = '▶ 逐帧播放'; return; }
+    let idx = +rng.value || 0;
+    setFrame(page, idx);
+    playTimers[page] = setInterval(() => {
+      idx = (+rng.value + 1) % frs.length;      // 循环播放，直到手动停止
+      setFrame(page, idx);
+    }, 900);
+    bar.querySelector('.fplay').textContent = '❚❚ 停止';
+  };
+  bar.querySelectorAll('.fstep').forEach(b => b.onclick = () => {
+    stopPlay(page);
+    setFrame(page, (+rng.value + +b.dataset.d + frs.length) % frs.length);
+  });
+  rng.addEventListener('input', () => { stopPlay(page); setFrame(page, +rng.value); });
+  bar.querySelector('.fx').onclick = () => restoreShot(page);
+  bar.querySelector('.fnote').addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const txt = e.target.value.trim();
+    if (!txt) return;
+    const fr = frs[+rng.value] || frs[0];
+    fnotes.push({ cid: Date.now() + '_f' + Math.random().toString(36).slice(2, 6),
+                  page, fr: fr.id, label: fr.label, txt, done: false });
+    saveFnote(); renderSide();
+    e.target.value = '';
+  });
+});
+function gotoFrame(page, frId) {               // 侧栏帧意见跳转：滚到页 + 切到对应帧
+  gotoPage(page);
+  const idx = frameList(page).findIndex(f => f.id === frId);
+  if (idx >= 0) setFrame(page, idx);
+}
+
+document.querySelectorAll('.layer').forEach(layer => {
+  layer.addEventListener('dblclick', () => {
+    const img = layer.closest('.shotwrap').querySelector('.shot');
+    if (img) zoom(img.src);
+  });
+});
+
+/* ---------- 标注绘制（框选/箭头/画笔/椭圆）与点击选中（共用指针事件） ---------- */
+let sel = null;                       // 当前选中 {page, s}
+let tool = 'rect';                    // 当前标注工具：rect | arrow | pen | ellipse
+document.querySelectorAll('#tools button').forEach(b => {
+  b.onclick = () => {
+    tool = b.dataset.tool;
+    document.querySelectorAll('#tools button').forEach(x => x.classList.toggle('on', x === b));
+  };
+});
+document.querySelectorAll('.layer').forEach(layer => {
+  const page = +layer.dataset.page;
+  let drawing = false, sx = 0, sy = 0, ghostParts = [], pts = [];   // pts: 画笔点序列(%)
+  const pos = e => {
+    const r = layer.getBoundingClientRect();
+    return [clamp((e.clientX - r.left) / r.width * 100), clamp((e.clientY - r.top) / r.height * 100)];
+  };
+  const setRect = (x0, y0, x1, y1) => {
+    ghostParts[0].style.left = Math.min(x0, x1) + '%';
+    ghostParts[0].style.top = Math.min(y0, y1) + '%';
+    ghostParts[0].style.width = Math.abs(x1 - x0) + '%';
+    ghostParts[0].style.height = Math.abs(y1 - y0) + '%';
+  };
+  // 箭头 ghost（几何 helpers arrowLenPct/arrowAng 在顶部工具区）
+  const addArrowParts = (x0, y0, x1, y1) => {
+    const ang = arrowAng(x0, y0, x1, y1);
+    const line = document.createElement('div');
+    line.className = 'arrowline';
+    line.style.left = x0 + '%'; line.style.top = y0 + '%';
+    line.style.width = arrowLenPct(x0, y0, x1, y1) + '%';
+    line.style.transform = `rotate(${ang}deg)`;
+    const head = document.createElement('div');
+    head.className = 'arrowhead';
+    head.style.left = x1 + '%'; head.style.top = y1 + '%';
+    head.style.transform = `translate(0,-50%) rotate(${ang}deg)`;
+    layer.appendChild(line); layer.appendChild(head);
+    ghostParts.push(line, head);
+  };
+  const addPenPart = () => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'pensvg');
+    svg.setAttribute('viewBox', '0 0 100 100');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    const pl = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    pl.setAttribute('points', pts.map(p => p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' '));
+    svg.appendChild(pl);
+    layer.appendChild(svg);
+    ghostParts.push(svg);
+  };
+  layer.addEventListener('pointerdown', e => {
+    if (e.target.closest('.box') || e.target.closest('.sel') || e.button !== 0) return;
+    [sx, sy] = pos(e);
+    drawing = true;
+    pts = [[sx, sy]];
+    try { layer.setPointerCapture(e.pointerId); } catch (err) { }
+    if (tool === 'arrow') addArrowParts(sx, sy, sx, sy);
+    else if (tool === 'pen') addPenPart();
+    else {
+      const g = document.createElement('div');
+      g.className = 'box draw' + (tool === 'ellipse' ? ' ellipse' : '');
+      layer.appendChild(g);
+      ghostParts.push(g);
+      setRect(sx, sy, sx, sy);
+    }
+  });
+  layer.addEventListener('pointermove', e => {
+    if (!drawing) return;
+    const [cx, cy] = pos(e);
+    if (tool === 'arrow') addArrowParts(sx, sy, cx, cy);
+    else if (tool === 'pen') {
+      const last = pts[pts.length - 1];
+      if (Math.abs(cx - last[0]) > 0.4 || Math.abs(cy - last[1]) > 0.4) {   // 采点间隔防过密
+        pts.push([cx, cy]);
+        addPenPart();
+      }
+    } else setRect(sx, sy, cx, cy);
+  });
+  layer.addEventListener('pointerup', e => {
+    if (!drawing) return;
+    drawing = false;
+    const [cx, cy] = pos(e);
+    ghostParts.forEach(g => g.remove());
+    ghostParts = [];
+    // 包围盒（pen 取点集包围盒）；箭头/笔迹存外扩后的 bbox 供命中与标签用，真实几何另存
+    let x, y, w, h;
+    if (tool === 'pen') {
+      const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+      x = Math.min(...xs); y = Math.min(...ys);
+      w = Math.max(...xs) - x; h = Math.max(...ys) - y;
+    } else {
+      x = Math.min(sx, cx); y = Math.min(sy, cy);
+      w = Math.abs(cx - sx); h = Math.abs(cy - sy);
+    }
+    if (pct2px(w, IW) < 14 || pct2px(h, IH) < 14) {   // 位移小于 14px 视为点击 → 点选元素
+      const px = pct2px(cx, IW), py = pct2px(cy, IH);
+      // 线形形状（高/宽为 0）的 bbox 是一条线，按 12px 视觉半宽膨胀后参与命中，
+      // 与面积最小优先统一——点线条描边内任意处都能选中线条本体
+      const hitBox = s => (s[3] < 2 || s[4] < 2)
+        ? [s[1] - 12, s[2] - 12, s[3] + 24, s[4] + 24]
+        : [s[1], s[2], s[3], s[4]];
+      const cands = (SHAPES[page] || []).map(s => effGeom(page, s)).filter(s => {
+        const b = hitBox(s);
+        return px >= b[0] && px <= b[0] + b[2] && py >= b[1] && py <= b[1] + b[3];
+      });
+      if (cands.length) {
+        select(page, cands.sort((a, b) => area(a) - area(b))[0]);   // 最内层优先
+      } else {
+        deselect(); hide('editor');
+      }
+      return;
+    }
+    const rec = { x, y, w, h, txt: '', kind: tool };
+    if (tool === 'arrow') {
+      rec.x1 = sx; rec.y1 = sy; rec.x2 = cx; rec.y2 = cy;
+      [x, y, w, h] = padBoxPct(x, y, w, h, 10);   // 细线 bbox 外扩：水平/垂直箭头高（宽）≈0 时删除钮与 hover 才可及
+      rec.x = x; rec.y = y; rec.w = w; rec.h = h;
+    }
+    if (tool === 'pen') {
+      rec.pts = pts.map(p => [+p[0].toFixed(2), +p[1].toFixed(2)]);
+      [x, y, w, h] = padBoxPct(x, y, w, h, 10);
+      rec.x = x; rec.y = y; rec.w = w; rec.h = h;
+    }
+    (boxes[page] = boxes[page] || []).push(rec);
+    saveBox();
+    drawPage(page);
+  });
+});
+
+/* ---------- 重绘某页的标注（四种形态）、意见区与选中高亮 ---------- */
+const KIND_CN = { rect: '框选', arrow: '箭头', pen: '笔迹', ellipse: '椭圆' };
+const KIND_SYM = { rect: '▭', arrow: '↗', pen: '✎', ellipse: '◯' };
+const kindOf = b => b.kind || 'rect';
+function drawArrowOn(page, b) {          // 箭头线段+头部（独立元素，不挡点击）
+  const layer = document.querySelector(`.layer[data-page="${page}"]`);
+  const ang = arrowAng(b.x1, b.y1, b.x2, b.y2);
+  const line = document.createElement('div');
+  line.className = 'arrowline';
+  line.style.left = b.x1 + '%'; line.style.top = b.y1 + '%';
+  line.style.width = arrowLenPct(b.x1, b.y1, b.x2, b.y2) + '%';
+  line.style.transform = `rotate(${ang}deg)`;
+  const head = document.createElement('div');
+  head.className = 'arrowhead';
+  head.style.left = b.x2 + '%'; head.style.top = b.y2 + '%';
+  head.style.transform = `translate(0,-50%) rotate(${ang}deg)`;
+  layer.appendChild(line); layer.appendChild(head);
+}
+function drawPage(page) {
+  const layer = document.querySelector(`.layer[data-page="${page}"]`);
+  const annots = document.querySelector(`.annots[data-page="${page}"]`);
+  if (!layer) return;
+  layer.innerHTML = '';
+  annots.innerHTML = '';
+  const bs = boxes[page] || [];
+  const pens = bs.filter(b => kindOf(b) === 'pen');
+  if (pens.length) {                     // 该页笔迹统一放一个 SVG 层（线宽恒定不随拉伸变形）
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'pensvg');
+    svg.setAttribute('viewBox', '0 0 100 100');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    pens.forEach(b => {
+      const pl = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      pl.setAttribute('points', b.pts.map(p => p[0] + ',' + p[1]).join(' '));
+      svg.appendChild(pl);
+    });
+    layer.appendChild(svg);
+  }
+  bs.forEach((b, i) => {
+    const kind = kindOf(b);
+    if (kind === 'arrow') drawArrowOn(page, b);
+    const el = document.createElement('div');
+    // 箭头/笔迹本体是细线：bbox 透明仅承担标签/删除/联动，视觉本体在上面独立渲染
+    el.className = 'box' + (kind === 'ellipse' ? ' ellipse' : '')
+                 + (kind === 'arrow' || kind === 'pen' ? ' penhit' : '')
+                 + (b.done ? ' done' : '');
+    el.style.left = b.x + '%'; el.style.top = b.y + '%';
+    el.style.width = b.w + '%'; el.style.height = b.h + '%';
+    el.dataset.no = boxNo(page, i);
+    // 编号标签与删除钮合成一条横排组合条：窄标注（垂直箭头等）时二者不再重叠
+    const head = document.createElement('div');
+    head.className = 'head';
+    head.innerHTML = `<span class="tag">${KIND_SYM[kind]} ${boxNo(page, i)}</span>`;
+    const del = document.createElement('button');
+    del.className = 'del'; del.textContent = '×';
+    del.onclick = ev => { ev.stopPropagation(); boxes[page].splice(i, 1); saveBox(); drawPage(page); };
+    head.appendChild(del);
+    el.appendChild(head);
+    el.addEventListener('click', ev => {          // 点标注 → 侧栏对应条目高亮（双向联动）
+      ev.stopPropagation();
+      const it = document.querySelector(`#sidelist .item[data-k="${page}:${i}"]`);
+      if (it) { it.scrollIntoView({ block: 'nearest' });
+        it.classList.remove('flash'); void it.offsetWidth; it.classList.add('flash'); }
+    });
+    layer.appendChild(el);
+
+    const hs = hits(page, b);
+    const geomDesc = kind === 'arrow'
+      ? `起点 (${toIn(b.x1, D.sw).toFixed(2)}, ${toIn(b.y1, D.sh).toFixed(2)}) → 终点 (${toIn(b.x2, D.sw).toFixed(2)}, ${toIn(b.y2, D.sh).toFixed(2)}) in`
+      : `英寸坐标 (${toIn(b.x, D.sw).toFixed(2)}, ${toIn(b.y, D.sh).toFixed(2)})
+        → (${toIn(b.x + b.w, D.sw).toFixed(2)}, ${toIn(b.y + b.h, D.sh).toFixed(2)})`;
+    const row = document.createElement('div');
+    row.className = 'annot';
+    row.innerHTML = `
+      <div class="row1"><b>意见 ${boxNo(page, i)}</b>${kind !== 'rect' ? '（' + KIND_CN[kind] + '）' : ''}　${geomDesc}
+        　命中 ${hs.length} 个元素</div>
+      <div class="hits">${hs.slice(0, 14).map(s => `<code>id=${s[0]}</code> ${label(s)}`).join('　')
+        || '（该区域内没有独立形状，可能是大图或背景面板的一部分）'}${hs.length > 14 ? ' …' : ''}</div>
+      <textarea data-box="${page}-${i}" placeholder="意见 ${boxNo(page, i)} 要怎么改：……"></textarea>`;
+    const ta = row.querySelector('textarea');
+    ta.value = b.txt || '';
+    ta.addEventListener('input', () => { b.txt = ta.value.trim(); saveBox(); });
+    annots.appendChild(row);
+  });
+  if (sel && sel.page === page) drawSel();
+  renderSide();
+}
+PAGES.forEach(p => drawPage(p.no));
+
+/* ---------- 点选与编辑面板 ---------- */
+const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+function setSelBox(el, px, py, pw, ph) {          // 渲染图像素 → 百分比
+  el.style.left = px / IW * 100 + '%';
+  el.style.top = py / IH * 100 + '%';
+  el.style.width = pw / IW * 100 + '%';
+  el.style.height = ph / IH * 100 + '%';
+}
+function drawSel() {
+  const layer = document.querySelector(`.layer[data-page="${sel.page}"]`);
+  if (!layer) return;
+  const old = layer.querySelector('.sel');
+  if (old) old.remove();
+  const s = sel.cur;                              // 选中框跟随当前编辑几何
+  const thin = s.w < 2 || s.h < 2;                // 线形形状框体极扁：只做整体移动，不挂缩放柄（柄挤在一条线上必误触）
+  const el = document.createElement('div');
+  el.className = 'sel' + (thin ? ' thin' : '');
+  setSelBox(el, s.x, s.y, s.w, s.h);
+  if (!thin) HANDLES.forEach(h => {
+    const hd = document.createElement('div');
+    hd.className = 'h';
+    hd.dataset.h = h;
+    el.appendChild(hd);
+  });
+  el.addEventListener('pointerdown', ev => startSelDrag(ev, el, layer));
+  layer.appendChild(el);
+}
+function startSelDrag(ev, el, layer) {
+  if (ev.button !== 0 || DOCX) return;             // docx 流式版面无拖拽几何
+  ev.stopPropagation();                            // 不进入画框流程
+  const r = layer.getBoundingClientRect();
+  const toPx = (cx, cy) => [(cx - r.left) / r.width * IW, (cy - r.top) / r.height * IH];
+  const [sx, sy] = toPx(ev.clientX, ev.clientY);
+  const hd = ev.target.closest('.h');
+  const mode = hd ? 'resize:' + hd.dataset.h : 'move';
+  const orig = { x: sel.cur.x, y: sel.cur.y, w: sel.cur.w, h: sel.cur.h };  // 从当前编辑几何继续
+  const MINW = 0.05 * PX, MINH = 0.05 * PY;
+  let lastG = { ...orig }, moved = false;
+  try { el.setPointerCapture(ev.pointerId); } catch (err) { }
+  const onMove = mev => {
+    const [cx, cy] = toPx(mev.clientX, mev.clientY);
+    const g = { ...orig };
+    if (mode === 'move') {
+      g.x = orig.x + (cx - sx);
+      g.y = orig.y + (cy - sy);
+    } else {
+      const d = mode.slice(7);
+      if (d.includes('e')) g.w = Math.max(MINW, orig.w + (cx - sx));
+      if (d.includes('s')) g.h = Math.max(MINH, orig.h + (cy - sy));
+      if (d.includes('w')) { g.w = Math.max(MINW, orig.w - (cx - sx)); g.x = orig.x + (orig.w - g.w); }
+      if (d.includes('n')) { g.h = Math.max(MINH, orig.h - (cy - sy)); g.y = orig.y + (orig.h - g.h); }
+    }
+    moved = moved || Math.abs(g.x - orig.x) > 1 || Math.abs(g.y - orig.y) > 1
+                 || Math.abs(g.w - orig.w) > 1 || Math.abs(g.h - orig.h) > 1;
+    lastG = g;
+    setSelBox(el, g.x, g.y, g.w, g.h);
+  };
+  const onUp = () => {
+    el.removeEventListener('pointermove', onMove);
+    el.removeEventListener('pointerup', onUp);
+    el.removeEventListener('pointercancel', onUp);
+    if (moved) dragCommit(lastG);
+    else setSelBox(el, orig.x, orig.y, orig.w, orig.h);   // 误触还原
+  };
+  el.addEventListener('pointermove', onMove);
+  el.addEventListener('pointerup', onUp);
+  el.addEventListener('pointercancel', onUp);
+}
+function dragCommit(g) {                           // 拖拽结果写入编辑面板（英寸）
+  const ed = document.getElementById('editor');
+  const gon = ed.querySelector('#f_geom_on');
+  if (!gon) return;
+  const nx = g.x / PX, ny = g.y / PY, nw = g.w / PX, nh = g.h / PY;
+  const orig = { x: sel.orig.x / PX, y: sel.orig.y / PY, w: sel.orig.w / PX, h: sel.orig.h / PY };
+  const now = { x: nx, y: ny, w: nw, h: nh };
+  // 更新当前编辑几何（后续拖拽从这里继续），选中框已实时画在 g 位置
+  sel.cur = { x: g.x, y: g.y, w: g.w, h: g.h };
+  (edits[sel.page] = edits[sel.page] || {})[sel.s[0]] = { x: g.x, y: g.y, w: g.w, h: g.h };
+  saveEdit();                                                    // 持久化：取消选中后仍可点新位置接着编辑
+  if (!['x', 'y', 'w', 'h'].some(k => Math.abs(now[k] - orig[k]) > 0.004)) return;
+  gon.checked = true;
+  [['f_x', nx], ['f_y', ny], ['f_w', nw], ['f_h', nh]].forEach(([id, v]) => {
+    const inp = ed.querySelector('#' + id);
+    inp.disabled = false;
+    inp.value = v.toFixed(2);
+  });
+  schedulePreview(true);                       // 拖拽松手自动渲染真实预览
+}
+function deselect() {
+  if (!sel) return;
+  const layer = document.querySelector(`.layer[data-page="${sel.page}"]`);
+  if (layer) { const el = layer.querySelector('.sel'); if (el) el.remove(); }
+  sel = null;
+}
+function select(page, s) {
+  // orig = 课件里的原始几何（渲染像素）；cur = 当前编辑几何（未应用编辑 + 拖拽叠加的基准）
+  const raw = (SHAPES[page] || []).find(t => t[0] === s[0]) || s;   // 命中可能带编辑几何，反查原始行
+  const e = effGeom(page, raw);
+  sel = { page, s: raw, orig: { x: raw[1], y: raw[2], w: raw[3], h: raw[4] },
+          cur: { x: e[1], y: e[2], w: e[3], h: e[4] } };
+  drawPage(page);
+  openEditor();
+}
+function hide(id) { document.getElementById(id).classList.remove('on'); }
+function show(id) {
+  ['editor', 'traybox'].forEach(x => { if (x !== id) hide(x); });
+  document.getElementById(id).classList.add('on');
+}
+
+function selectParent(pid) {
+  if (!sel) return;
+  const row = (SHAPES[sel.page] || []).find(s => s[0] === pid);
+  if (row) select(sel.page, row);
+}
+let newImg = null;                        // 编辑面板中已选的新图 dataURL（pic 替换用）
+function compressImg(file, cb) {          // 长边压到 1920；PNG 保透明走 PNG，其余 JPEG 0.9
+  const img = new Image();
+  img.onload = () => {
+    const k = Math.min(1, 1920 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * k);
+    c.height = Math.round(img.naturalHeight * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const isPng = /image\/png/.test(file.type);
+    cb(c.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.9), c.width, c.height);
+  };
+  img.src = URL.createObjectURL(file);
+}
+function delShape() {                     // 删除形状：应用时移除（含其动画引用），有备份可撤销
+  if (!sel) return;
+  if (!confirm('确定删除此形状？点「应用全部改动」时从课件中移除（其动画引用一并清除）。')) return;
+  changes.push({ cid: Date.now() + '_d' + Math.random().toString(36).slice(2, 6),
+                 page: sel.page, id: sel.s[0], name: sel.s[5] || '',
+                 tag: sel.s[7] || 'sp', ref: txtRef(sel.s), full: '',
+                 fields: { del: true }, desc: '删除形状' });
+  saveChg(); renderTray();
+  deselect(); hide('editor');
+}
+function openEditor() {
+  const [no, name, txt, tag] = [sel.s[0], sel.s[5], sel.s[6], sel.s[7] || 'sp'];
+  const par = sel.s[11] || 0;
+  const full = tag === 'sp' ? (sel.s[8] || '') : '';
+  const curSz = sel.s[9], mixed = sel.s[10];
+  const cx = (sel.cur.x / PX).toFixed(2), cy = (sel.cur.y / PY).toFixed(2);
+  const cw = (sel.cur.w / PX).toFixed(2), ch = (sel.cur.h / PY).toFixed(2);
+  const canText = tag === 'sp';
+  const canGeom = true;
+  const geomTip = tag === 'grpSp' ? '组合整体移动' : '';
+  const ed = document.getElementById('editor');
+  ed.innerHTML = `
+    <h3>第 ${sel.page} 页 · id=${no} · ${TAG_CN[tag] || tag}
+      <button class="x" onclick="deselect();hide('editor')">✕</button></h3>
+    <div class="bd">
+      <div class="pinfo">名称 <code>${(name || '（无名）').replace(/</g, '&lt;')}</code>
+        位置 (${cx}, ${cy}) in　大小 ${cw} × ${ch} in${par
+          ? `　<a href="javascript:void(0)" style="color:var(--blue)" onclick="selectParent(${par})">选父组 id=${par}</a>`
+          : ''}</div>
+      ${canText ? `
+      <div class="frow"><label>文字</label>${mixed ? '<span class="dim">（混排字号，框内为第一种）</span>' : ''}</div>
+      <textarea id="f_text" placeholder="直接修改；回车换段">${escHtml(full)}</textarea>
+      <div class="frow"><label>字号 pt</label><input type="number" id="f_size" min="5" max="200" step="0.5" value="${curSz ?? ''}" placeholder="未显式设置"></div>
+      <div class="frow"><label>加粗</label>
+        <select id="f_bold"><option value="">不改</option><option value="on">加粗</option><option value="off">取消加粗</option></select></div>
+      <div class="frow"><label>文字颜色</label>
+        <input type="checkbox" id="f_color_on"><input type="color" id="f_color" value="#222222" disabled></div>
+      ` : `<p class="dim">${TAG_CN[tag] || tag}不支持直接改文字/样式（表格、图表、公式请画框提意见）。</p>`}
+      ${tag === 'pic' ? `
+      <div class="frow"><label>替换图片</label><span class="dim">选本地图，应用时写回（自动压缩）</span></div>
+      <div class="frow"><input type="file" id="f_img" accept="image/png,image/jpeg"
+           style="font-size:12px"></div>
+      <div class="cur" id="f_img_info">${''}</div>` : ''}
+      ${(!DOCX) ? `
+      <div class="frow"><label>位置大小</label>
+        <input type="checkbox" id="f_geom_on">${geomTip ? '　' + geomTip : ''}</div>
+      <div class="frow"><label>x in</label><input type="number" id="f_x" step="0.05" value="${cx}" disabled>
+        <label>y in</label><input type="number" id="f_y" step="0.05" value="${cy}" disabled></div>
+      <div class="frow"><label>宽 in</label><input type="number" id="f_w" step="0.05" value="${cw}" disabled>
+        <label>高 in</label><input type="number" id="f_h" step="0.05" value="${ch}" disabled></div>
+      ` : ''}
+      <div class="frow"><label>意见</label><span class="dim">对选中元素提修改意见（发我处理，不自动应用）</span></div>
+      <textarea id="f_note" placeholder="例：这个箭头加粗一些 / 这里的字改成红色 / 图片放大一点……"></textarea>
+      <div class="btns">
+        <button class="off" onclick="deselect();hide('editor')">取消</button>
+        <button class="off" style="color:#C0392B" onclick="delShape()">删除此形状</button>
+        <button class="ok" onclick="commitChange()">加入改动清单</button>
+      </div>
+    </div>`;
+  const con = ed.querySelector('#f_color_on'), col = ed.querySelector('#f_color');
+  if (con) con.onchange = () => { col.disabled = !con.checked; if (con.checked) schedulePreview(false); };
+  const gon = ed.querySelector('#f_geom_on');
+  // 已有未提交的几何编辑（连续编辑重开面板）时自动勾选并启用
+  const geomDirty = Math.abs(sel.cur.x - sel.orig.x) > 0.5 ||
+                    Math.abs(sel.cur.y - sel.orig.y) > 0.5 ||
+                    Math.abs(sel.cur.w - sel.orig.w) > 0.5 ||
+                    Math.abs(sel.cur.h - sel.orig.h) > 0.5;
+  if (gon) {
+    gon.checked = geomDirty;
+    ['f_x', 'f_y', 'f_w', 'f_h'].forEach(
+      id => ed.querySelector('#' + id).disabled = !geomDirty);
+    gon.onchange = () => {
+      ['f_x', 'f_y', 'f_w', 'f_h'].forEach(
+        id => ed.querySelector('#' + id).disabled = !gon.checked);
+      if (gon.checked) schedulePreview(false);
+    };
+  }
+  ['f_text', 'f_size', 'f_x', 'f_y', 'f_w', 'f_h', 'f_color'].forEach(id => {
+    const el = ed.querySelector('#' + id);
+    if (el) el.addEventListener('input', () => schedulePreview(false));
+  });
+  const bold = ed.querySelector('#f_bold');
+  if (bold) bold.addEventListener('change', () => schedulePreview(false));
+  newImg = null;                            // 每次打开面板清掉上一形状的选图
+  const fin = ed.querySelector('#f_img'), finfo = ed.querySelector('#f_img_info');
+  if (fin) fin.addEventListener('change', () => {
+    const f = fin.files[0];
+    if (!f) { newImg = null; finfo.textContent = ''; return; }
+    compressImg(f, (data, w, h) => {
+      newImg = data;
+      finfo.textContent = `新图 ${w}×${h}，约 ${Math.round(data.length / 1365)} KB（加入改动清单后应用写回）`;
+    });
+  });
+  show('editor');
+}
+
+function collectEditorFields() {
+  /* 从编辑面板收集待写回字段（提交与预览共用）；tag 非 sp 时只可能收集几何 */
+  const s = sel.s, tag = s[7] || 'sp';
+  const fields = {}, desc = [];
+  if (tag === 'sp') {
+    const origT = sel.s[8] || '';
+    const t = document.getElementById('f_text').value;
+    if (t && t !== origT) { fields.text = t.replace(/\r\n?/g, '\n'); desc.push('改文字'); }
+    const origSz = sel.s[9];
+    const sz = parseFloat(document.getElementById('f_size').value);
+    if (sz > 0 && (origSz == null || Math.abs(sz - origSz) > 0.01)) {
+      fields.size = sz; desc.push('字号 ' + sz + 'pt');
+    }
+    const b = document.getElementById('f_bold').value;
+    if (b) { fields.bold = b === 'on'; desc.push(b === 'on' ? '加粗' : '取消加粗'); }
+    if (document.getElementById('f_color_on').checked) {
+      fields.color = document.getElementById('f_color').value.replace('#', '').toUpperCase();
+      desc.push('颜色 #' + fields.color);
+    }
+  }
+  const gonEl = document.getElementById('f_geom_on');
+  if (newImg) { fields.img = newImg; desc.push('替换图片'); }
+  if (gonEl && gonEl.checked) {
+    const cur = { x: sel.orig.x / PX, y: sel.orig.y / PY,
+                  w: sel.orig.w / PX, h: sel.orig.h / PY };   // 与课件现状比较
+    const g = {};
+    ['x', 'y', 'w', 'h'].forEach(k => {
+      const v = parseFloat(document.getElementById('f_' + k).value);
+      if (isFinite(v) && Math.abs(v - cur[k]) > 0.004) g[k] = v;
+    });
+    if (Object.keys(g).length) {
+      Object.assign(fields, g);
+      desc.push(`位置→(${(g.x ?? cur.x).toFixed(2)}, ${(g.y ?? cur.y).toFixed(2)}) 大小→${(g.w ?? cur.w).toFixed(2)}×${(g.h ?? cur.h).toFixed(2)}`);
+    }
+  }
+  return { fields, desc };
+}
+
+function commitChange() {
+  const s = sel.s, page = sel.page;
+  const tag = s[7] || 'sp';
+  const { fields, desc } = collectEditorFields();
+  const note = (document.getElementById('f_note')?.value || '').trim();
+  if (!Object.keys(fields).length && !note) {
+    alert('没有填写任何要改的字段或意见。');
+    return;
+  }
+  const base = { cid: Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+                 page, id: s[0], name: s[5] || '', tag, ref: txtRef(s),
+                 full: tag === 'sp' ? (sel.s[8] || '') : '' };
+  if (Object.keys(fields).length) {
+    changes.push({ ...base, fields, desc: desc.join('；') });
+    // 手输几何同步进未应用编辑层，命中/选中跟随新位置
+    const gk = ['x', 'y', 'w', 'h'].filter(k => k in fields);
+    if (gk.length) {
+      const e0 = effGeom(page, s);
+      const e = { x: e0[1], y: e0[2], w: e0[3], h: e0[4] };
+      gk.forEach(k => e[k] = fields[k] * (k === 'x' || k === 'w' ? PX : PY));
+      (edits[page] = edits[page] || {})[s[0]] = e;
+      saveEdit();
+    }
+  }
+  if (note) {
+    enotes.push({ ...base, note });
+  }
+  saveChg(); saveEnote(); renderTray();
+  if (Object.keys(fields).length) schedulePreview(false);   // 清单变化即刷新预览
+  deselect(); hide('editor');
+}
+const txtRef = s => s[6] ? s[6].slice(0, 18) : (s[5] || '图形');
+
+/* ---------- 实时预览：未应用改动渲染成真实页面图（写临时副本，不碰原件） ---------- */
+const K_LASTAP = 'ppt_review_lastapply::' + D.key;
+let previewTimer = null, previewBusy = false, previewDirty = false, previewJob = null;
+const previewShown = {};                          // 页码 -> 预览图相对路径
+
+function setPreviewStat(msg) {
+  const el = document.getElementById('pvstat');
+  if (msg) { el.textContent = msg; el.classList.add('on'); }
+  else el.classList.remove('on');
+}
+function restorePreview(page) {
+  const img = document.querySelector(`.shotwrap[data-page="${page}"] .shot`);
+  const badge = document.querySelector(`.shotwrap[data-page="${page}"] .pvbadge`);
+  if (img) img.src = `img/slide${pad2(page)}.png?v=${D.v || 0}`;
+  if (badge) badge.classList.remove('on');
+  delete previewShown[page];
+}
+function restoreAllPreviews() {
+  Object.keys(previewShown).forEach(p => restorePreview(+p));
+}
+function showPreview(page, ts, pngs) {
+  const png = pngs.find(f => f === `preview_${ts}_slide${pad2(page)}.png`);
+  if (!png) return;
+  const img = document.querySelector(`.shotwrap[data-page="${page}"] .shot`);
+  const badge = document.querySelector(`.shotwrap[data-page="${page}"] .pvbadge`);
+  if (img) img.src = `apply/${png}`;
+  if (badge) { badge.classList.add('on'); badge.textContent = '↑ 以上是预览效果 · 未写回课件 · 点击还原'; }
+  previewShown[page] = `apply/${png}`;
+}
+function schedulePreview(now) {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(runPreview, now ? 0 : 1200);
+}
+function runPreview() {
+  if (previewBusy) { previewDirty = true; return; }
+  // 预览内容 = 改动清单全部 + 当前编辑面板里未提交的字段
+  const list = changes.map(c => ({ page: c.page, id: c.id, fields: c.fields,
+                                   cid: c.cid, full: c.full || '' }));
+  const ed = document.getElementById('editor');
+  if (sel && ed.classList.contains('on')) {
+    const f = collectEditorFields().fields;
+    if (Object.keys(f).length)
+      list.push({ page: sel.page, id: sel.s[0], fields: f, cid: '__cur__',
+                  full: sel.s[7] === 'sp' ? (sel.s[8] || '') : '' });
+  }
+  if (!list.length) { restoreAllPreviews(); setPreviewStat(''); return; }
+  previewBusy = true;
+  setPreviewStat('正在渲染预览效果（写临时副本，不碰课件原件，约几秒）…');
+  fetch('/preview', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key: D.key, pptx: D.pptx, changes: list }) })
+    .then(r => r.json())
+    .then(j => {
+      if (!j.ok) { previewBusy = false; setPreviewStat('预览失败：' + (j.msg || '')); return; }
+      previewJob = j.job;
+      pollPreview(j.job);
+    })
+    .catch(e => { previewBusy = false; setPreviewStat('预览请求失败：' + e); });
+}
+function pollPreview(job) {
+  fetch(`/status?job=${job}&type=preview`).then(r => r.json()).then(st => {
+    if (job !== previewJob) return;             // 已有更新的预览任务，丢弃旧轮询
+    if (st.state === 'running') {
+      setPreviewStat(st.msg || '渲染预览中…');
+      setTimeout(() => pollPreview(job), 1200);
+      return;
+    }
+    previewBusy = false;
+    if (st.state === 'ok' && st.pngs && st.pngs.length) {
+      (st.pages || []).forEach(p => showPreview(p, st.ts, st.pngs));
+      setPreviewStat('');
+    } else {
+      setPreviewStat('预览失败：' + (st.msg || '未知错误'));
+    }
+    if (previewDirty) { previewDirty = false; runPreview(); }
+  }).catch(() => { setTimeout(() => pollPreview(job), 2000); });
+}
+
+/* ---------- 意见侧栏（全局编号 P页-序，与图上框双向联动） ---------- */
+function sideCount() {
+  return Object.values(boxes).reduce((n, a) => n + a.length, 0)
+       + Object.values(notes).filter(v => v).length + enotes.length + fnotes.length;
+}
+const ckBtn = (obj, save) => {          // 已处理勾选钮：点切换 done，存盘重绘侧栏
+  const b = document.createElement('button');
+  b.className = 'ck'; b.textContent = obj.done ? '✓' : '';
+  b.title = obj.done ? '标记为未处理' : '标记为已处理';
+  b.onclick = ev => { ev.stopPropagation(); obj.done = !obj.done; save(); renderSide(); };
+  return b;
+};
+function renderSide() {
+  const n = sideCount();
+  document.getElementById('sidebtn').textContent = `意见列表 (${n})`;
+  document.getElementById('sidecnt').textContent = n ? `（${n} 条）` : '';
+  const box = document.getElementById('sidelist');
+  if (!n) {
+    box.innerHTML = '<div class="empty">还没有意见——画框、点元素提意见、写整页意见或对帧提意见后，集中列在这里。</div>';
+    return;
+  }
+  box.innerHTML = '';
+  PAGES.forEach(p => {
+    const bs = (boxes[p.no] || []).map((b, i) => ({ b, i })).sort(
+      (a, z) => (a.b.done ? 1 : 0) - (z.b.done ? 1 : 0));       // 未处理在前，已处理沉底
+    const nv = (notes[p.no] || '').trim();
+    const es = enotes.filter(c => c.page === p.no).sort(
+      (a, z) => (a.done ? 1 : 0) - (z.done ? 1 : 0));
+    const fs = fnotes.filter(c => c.page === p.no).sort(
+      (a, z) => (a.done ? 1 : 0) - (z.done ? 1 : 0));
+    if (!bs.length && !nv && !es.length && !fs.length) return;
+    const sec = document.createElement('div');
+    sec.className = 'sec';
+    sec.textContent = '第 ' + p.no + ' 页 · ' + (p.title || '');
+    box.appendChild(sec);
+    fs.forEach(c => {
+      const it = document.createElement('div');
+      it.className = 'item page' + (c.done ? ' done' : '');
+      it.innerHTML = `<span class="tx"><b style="color:var(--orange)">▣ ${escHtml(c.label)}</b> ${escHtml(c.txt.slice(0, 40))}</span>`;
+      it.prepend(ckBtn(c, saveFnote));
+      it.onclick = () => gotoFrame(p.no, c.fr);
+      box.appendChild(it);
+    });
+    es.forEach(c => {
+      const it = document.createElement('div');
+      it.className = 'item elem' + (c.done ? ' done' : '');
+      it.innerHTML = `<span class="tx">${escHtml(c.note.slice(0, 42))}</span>`;
+      it.prepend(ckBtn(c, saveEnote));
+      it.onclick = () => { gotoPage(p.no); flashShape(p.no, c.id); };
+      box.appendChild(it);
+    });
+    bs.forEach(({ b, i }) => {
+      const it = document.createElement('div');
+      it.className = 'item' + (b.done ? ' done' : '');
+      it.dataset.k = p.no + ':' + i;
+      const sym = KIND_SYM[kindOf(b)];
+      it.innerHTML = `<span class="no">${boxNo(p.no, i)}</span>
+        <span class="tx">${sym !== '▭' ? '<b style="color:var(--orange)">' + sym + '</b> ' : ''}${b.txt ? escHtml(b.txt.slice(0, 42)) : '<i style="color:#9AA0AB">未填写</i>'}</span>`;
+      it.prepend(ckBtn(b, saveBox));
+      it.onclick = () => gotoBox(p.no, i);
+      box.appendChild(it);
+    });
+    if (nv) {
+      const it = document.createElement('div');
+      it.className = 'item page';
+      it.innerHTML = `<span class="tx">${escHtml(nv.slice(0, 42))}</span>`;
+      it.onclick = () => gotoPage(p.no);
+      box.appendChild(it);
+    }
+  });
+}
+function gotoPage(page) {
+  const el = document.querySelector(`.card .shotwrap[data-page="${page}"]`);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function gotoBox(page, i) {
+  gotoPage(page);
+  const b = document.querySelector(`.layer[data-page="${page}"] .box[data-no="${boxNo(page, i)}"]`);
+  if (!b) return;
+  b.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  b.classList.remove('flash'); void b.offsetWidth; b.classList.add('flash');
+  const it = document.querySelector(`#sidelist .item[data-k="${page}:${i}"]`);
+  if (it) { it.classList.remove('flash'); void it.offsetWidth; it.classList.add('flash'); }
+}
+function flashShape(page, sid) {           // 元素意见跳转：临时高亮该形状 2 秒
+  const s = (SHAPES[page] || []).find(t => t[0] === sid);
+  const layer = document.querySelector(`.layer[data-page="${page}"]`);
+  if (!s || !layer) return;
+  const el = document.createElement('div');
+  el.className = 'box tmp';
+  setSelBox(el, s[1], s[2], s[3], s[4]);
+  layer.appendChild(el);
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => el.remove(), 2200);
+}
+function toggleSide() {
+  const el = document.getElementById('sidenav');
+  if (el.classList.contains('on')) hide('sidenav');
+  else { renderSide(); el.classList.add('on'); }
+}
+
+/* ---------- 应用前后对比（apply_changes.py 留存 before/after 渲染图） ---------- */
+let cmpTs = '';
+function openCompare() {
+  let rec = null;
+  try { rec = JSON.parse(localStorage.getItem(K_LASTCMP) || 'null'); } catch (e) { }
+  if (!rec || !rec.cmp) { alert('没有可查看的应用对比记录（对比留存随撤销失效）。'); return; }
+  const pages = (rec.pages || []).filter(p => p >= 1 && p <= PAGES.length);
+  if (!pages.length) { alert('该次应用没有留存对比图。'); return; }
+  cmpTs = rec.ts;
+  const box = document.getElementById('cmppages');
+  box.innerHTML = '';
+  pages.forEach(p => {
+    const b = document.createElement('button');
+    b.textContent = '第 ' + p + ' 页';
+    b.onclick = () => showCmpPage(p);
+    box.appendChild(b);
+  });
+  showCmpPage(pages[0]);
+  document.getElementById('cmp').classList.add('on');
+}
+function showCmpPage(p) {
+  document.querySelectorAll('#cmppages button').forEach(b =>
+    b.classList.toggle('on', b.textContent === '第 ' + p + ' 页'));
+  const bb = document.getElementById('cmpB'), aa = document.getElementById('cmpA');
+  const colB = document.getElementById('cmpcolB');
+  colB.style.visibility = 'visible';        // before 缺图（首次生成即应用等）时隐藏左列
+  bb.onerror = () => { colB.style.visibility = 'hidden'; };
+  bb.src = `apply/compare_${cmpTs}/before_slide${pad2(p)}.png`;
+  aa.src = `apply/compare_${cmpTs}/after_slide${pad2(p)}.png`;
+}
+
+/* ---------- 撤销最近一次应用 ---------- */
+function revertLast() {
+  const lastAp = localStorage.getItem(K_LASTAP);
+  if (!lastAp) { alert('没有可撤销的应用记录。'); return; }
+  if (!confirm('撤销最近一次应用，把课件恢复到应用前的样子？\n（页面渲染也会一并恢复）')) return;
+  maskRun('正在从备份恢复课件…');
+  fetch('/revert', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key: D.key, ts: lastAp }) })
+    .then(r => r.json())
+    .then(j => {
+      if (!j.ok) { maskFail(j.msg || '撤销被拒绝', []); return; }
+      pollRevert(j.job);
+    })
+    .catch(e => maskFail('网络错误：' + e, []));
+}
+function pollRevert(job) {
+  fetch(`/status?job=${job}&type=revert`).then(r => r.json()).then(st => {
+    if (st.state === 'running') {
+      maskRun(st.msg || '恢复中…');
+      setTimeout(() => pollRevert(job), 1200);
+      return;
+    }
+    if (st.state === 'ok') {
+      localStorage.removeItem(K_LASTAP);
+      localStorage.removeItem(K_LASTCMP);       // 已回到应用前，对比留存随之失效
+      clearEdits(null, null);                   // 课件已回到应用前，编辑层随之作废
+      document.getElementById('masktitle').textContent = '已撤销';
+      document.getElementById('maskbody').innerHTML =
+        '<div class="res">✓ 课件与页面渲染已恢复到该次应用之前的状态。</div>';
+      document.getElementById('maskbar').style.display = 'flex';
+      renderTray();
+    } else {
+      maskFail(st.msg || '撤销失败', []);
+    }
+  }).catch(() => { setTimeout(() => pollRevert(job), 2000); });
+}
+
+/* ---------- 改动清单 ---------- */
+function renderTray() {
+  renderSide();
+  document.getElementById('cmpline').style.display =
+    (localStorage.getItem(K_LASTAP) && localStorage.getItem(K_LASTCMP)) ? 'block' : 'none';
+  const n = changes.length + enotes.length;
+  document.getElementById('traybtn').textContent = `改动清单 (${n})`;
+  document.getElementById('revertline').style.display =
+    localStorage.getItem(K_LASTAP) ? 'block' : 'none';
+  const box = document.getElementById('traylist');
+  document.getElementById('traycnt').textContent = n ? `（${n} 条）` : '';
+  if (!n) {
+    box.innerHTML = '<div class="empty">还没有改动——单击页面上的元素开始编辑。</div>';
+    return;
+  }
+  box.innerHTML = '';
+  if (changes.length) {
+    const sec = document.createElement('div');
+    sec.className = 'sec';
+    sec.textContent = '待应用（应用后直接写回课件）';
+    box.appendChild(sec);
+  }
+  changes.forEach((c, i) => {
+    const el = document.createElement('div');
+    el.className = 'item';
+    el.innerHTML = `<button class="x" data-k="c" data-i="${i}">✕</button>
+      <div class="d">第 ${c.page} 页 <code>id=${c.id}</code> ${c.ref ? '「' + c.ref + '」' : ''}</div>
+      <div class="m">${c.desc || ''}</div>`;
+    el.querySelector('.x').onclick = () => {
+      if (['x', 'y', 'w', 'h'].some(k => k in c.fields)) {   // 几何改动被删 → 编辑层同步回退，命中回课件现状
+        const keep = changes.filter(t => t !== c && t.page === c.page && t.id === c.id
+                                        && ['x', 'y', 'w', 'h'].some(k => k in t.fields));
+        if (!keep.length) clearEdits(c.page, [c.id]);
+      }
+      changes.splice(changes.indexOf(c), 1); saveChg(); renderTray();
+    };
+    box.appendChild(el);
+  });
+  if (enotes.length) {
+    const sec = document.createElement('div');
+    sec.className = 'sec';
+    sec.textContent = '元素意见（不自动应用，生成汇总发我处理）';
+    box.appendChild(sec);
+  }
+  enotes.forEach((c, i) => {
+    const el = document.createElement('div');
+    el.className = 'item note';
+    el.innerHTML = `<button class="x" data-k="n" data-i="${i}">✕</button>
+      <div class="d"><span class="k">意见</span> 第 ${c.page} 页 <code>id=${c.id}</code> ${c.ref ? '「' + c.ref + '」' : ''}</div>
+      <div class="m">${c.note.replace(/</g, '&lt;')}</div>`;
+    el.querySelector('.x').onclick = () => { enotes.splice(i, 1); saveEnote(); renderTray(); };
+    box.appendChild(el);
+  });
+}
+function toggleTray() {
+  const on = document.getElementById('traybox').classList.contains('on');
+  if (on) hide('traybox'); else { renderTray(); show('traybox'); }
+}
+renderTray();
+
+/* ---------- 应用：POST /apply + 轮询 ---------- */
+let polling = null;
+function maskRun(msg) {
+  document.getElementById('masktitle').textContent = '应用改动';
+  document.getElementById('maskbody').innerHTML = `<p><span class="spin"></span>${msg || '提交中…'}</p>`;
+  document.getElementById('maskbar').style.display = 'none';
+  document.getElementById('mask').classList.add('on');
+}
+function applyAll() {
+  if (!changes.length) {
+    alert(enotes.length
+      ? '清单里只有元素意见——意见不自动应用，点「生成意见汇总」复制后发我处理。'
+      : '改动清单是空的。');
+    return;
+  }
+  if (!confirm(`把 ${changes.length} 条改动直接写回课件文件？\n写回后自动重渲染（约几十秒）。`)) return;
+  hide('traybox');
+  maskRun('提交改动清单…');
+  fetch('/apply', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key: D.key, pptx: D.pptx, changes }) })
+    .then(r => r.json())
+    .then(j => {
+      if (!j.ok) { maskFail(j.msg || '提交被拒绝', []); return; }
+      maskRun('写回形状与渲染中，视页数约需几十秒…');
+      poll(j.job);
+    })
+    .catch(e => maskFail('网络错误：' + e, []));
+}
+function poll(job) {
+  fetch('/status?job=' + job).then(r => r.json()).then(st => {
+    if (st.state === 'running') {
+      maskRun(st.msg || '处理中…');
+      polling = setTimeout(() => poll(job), 1500);
+    } else if (st.state === 'ok') {
+      done(st);
+    } else {
+      maskFail(st.msg || '应用失败', st.results || [], st.backup);
+    }
+  }).catch(() => { polling = setTimeout(() => poll(job), 2500); });
+}
+function done(st) {
+  const rs = st.results || [];
+  const fails = rs.filter(r => !r.ok);
+  // 成功的条目按 cid 从清单剔除，失败的保留便于重试
+  const okCids = new Set(rs.filter(r => r.ok && r.cid).map(r => r.cid));
+  changes = changes.filter(c => !okCids.has(c.cid));
+  clearEdits(null, null);                       // 已写回的几何成为课件现状，编辑层整体清空防双重叠加
+  localStorage.setItem(K_LASTAP, st.ts);        // 记录撤销点（renderTray 依赖这两项判断撤销/对比入口）
+  if (st.compare)
+    localStorage.setItem(K_LASTCMP, JSON.stringify(
+      { ts: st.ts, cmp: st.compare, pages: st.cmp_pages || [] }));
+  saveChg(); renderTray();
+  if (st.compare)
+    document.getElementById('cmpbtn').style.display = 'inline-block';
+  document.getElementById('revertbtn').style.display = 'inline-block';
+  document.getElementById('masktitle').textContent = '应用完成 · ' + st.msg;
+  document.getElementById('maskbody').innerHTML =
+    (fails.length
+      ? fails.map(r => `<div class="res bad">✕ 第 ${r.page} 页 id=${r.id} ${r.op}: ${r.msg || '失败'}</div>`).join('')
+      : '<div class="res">✓ 全部改动已写回课件文件，页面渲染已更新。</div>')
+    + '<p class="dim">点「刷新查看」重新加载审阅页（改动后的渲染图与形状数据）。</p>';
+  document.getElementById('maskbar').style.display = 'flex';
+}
+function maskFail(msg, results, backup) {
+  document.getElementById('masktitle').textContent = '应用失败';
+  document.getElementById('maskbody').innerHTML =
+    `<div class="res bad">✕ ${msg}</div>`
+    + (results && results.length
+        ? results.map(r => `<div class="res${r.ok ? '' : ' bad'}">${r.ok ? '✓' : '✕'} 第 ${r.page} 页 id=${r.id} ${r.op}${r.msg ? '：' + r.msg : ''}</div>`).join('')
+        : '')
+    + (backup ? `<p class="dim">已写回前的备份：${backup}</p>` : '')
+    + '<p class="dim">改动清单已保留，可修正后重新点「应用全部改动」。</p>';
+  document.getElementById('maskbar').style.display = 'flex';
+}
+function maskBack() {
+  document.getElementById('mask').classList.remove('on');
+  renderTray(); show('traybox');
+}
+
+/* ---------- 导出 ---------- */
+function makeText() {
+  const out = [];
+  PAGES.forEach(p => {
+    const bs = (boxes[p.no] || []).filter(b => b.txt && !b.done);
+    const nv = (notes[p.no] || '').trim();
+    const cs = changes.filter(c => c.page === p.no);
+    const es = enotes.filter(c => c.page === p.no && !c.done);
+    const fs = fnotes.filter(c => c.page === p.no && !c.done);
+    if (!bs.length && !nv && !cs.length && !es.length && !fs.length) return;
+    out.push(`【第 ${p.no} 页 · ${p.title}】`);
+    fs.forEach(c => out.push(`  ◆ 帧意见（${c.label}）：${c.txt}`));
+    es.forEach(c => out.push(`  ◆ 元素意见 id=${c.id} ${c.ref ? '「' + c.ref + '」' : ''}：${c.note}`));
+    cs.forEach(c => out.push(`  ◆ 直接改动（未应用部分） id=${c.id} ${c.ref ? '「' + c.ref + '」' : ''}: ${c.desc}`));
+    bs.forEach(b => {
+      const idx = boxes[p.no].indexOf(b) + 1;
+      const hs = hits(p.no, b);
+      const kind = kindOf(b);
+      const kn = kind === 'rect' ? '' : '（' + KIND_CN[kind] + '）';
+      if (kind === 'arrow') {
+        out.push(`  ◆ 意见${boxNo(p.no, idx - 1)}${kn} 起点 (${toIn(b.x1, D.sw).toFixed(2)}, ${toIn(b.y1, D.sh).toFixed(2)}) → 终点 (${toIn(b.x2, D.sw).toFixed(2)}, ${toIn(b.y2, D.sh).toFixed(2)}) in`);
+      } else {
+        out.push(`  ◆ 意见${boxNo(p.no, idx - 1)}${kn} 坐标 (${toIn(b.x, D.sw).toFixed(2)}, ${toIn(b.y, D.sh).toFixed(2)})–(${toIn(b.x + b.w, D.sw).toFixed(2)}, ${toIn(b.y + b.h, D.sh).toFixed(2)}) in`);
+      }
+      out.push(`    命中：${hs.slice(0, 14).map(s => s[0] + (s[6] ? '「' + s[6] + '」' : '')).join('、') || '（无独立形状）'}`);
+      out.push(`    意见：${b.txt}`);
+    });
+    if (nv) out.push(`  整页意见：${nv}`);
+    out.push('');
+  });
+  document.getElementById('outtext').value =
+    out.length ? out.join('\n') : '（还没有填写意见——点选元素直接改，或画个框写一句话试试）';
+  document.getElementById('out').classList.add('on');
+}
+function copyOut() {
+  const el = document.getElementById('outtext');
+  el.select();
+  navigator.clipboard.writeText(el.value).catch(() => document.execCommand('copy'));
+}
+function clearAll() {
+  if (!confirm('清空所有页的标注、意见与未应用的改动清单？此操作不可撤销。')) return;
+  notes = {}; boxes = {}; changes = []; enotes = []; fnotes = [];
+  clearEdits(null, null);
+  saveNote(); saveBox(); saveChg(); saveEnote(); saveFnote(); renderTray();
+  document.querySelectorAll('textarea[data-note]').forEach(t => t.value = '');
+  PAGES.forEach(p => { drawPage(p.no); restoreShot(p.no); });
+}
+function zoom(src) {
+  document.getElementById('lightimg').src = src;
+  document.getElementById('light').classList.add('on');
+}
+</script>
+</body>
+</html>
