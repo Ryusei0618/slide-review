@@ -13,6 +13,21 @@
 - **四种标注**：▭ 框选 / ↗ 箭头（意见带「起点→终点」方向语义）/ ✎ 画笔 / ◯ 椭圆，全局编号、侧栏集中管理、双向跳转高亮、可标记已处理
 - **逐帧动画审阅**：有动画的页自动生成帧序列，播放器逐帧看击序节奏，对某一帧直接提意见（带帧号）
 
+![审阅页主视图：意见列表侧栏 + 页面标注 + 帧播放器](docs/img/review-main.png)
+
+| 标注形态（框选 / 箭头 / 画笔 / 椭圆） | 逐帧动画审阅 |
+|---|---|
+| ![](docs/img/annotate.png) | ![](docs/img/frame-player.png) |
+| **点选直改 / 替换图片 / 删除形状** |
+| ![](docs/img/editor-panel.png) |
+
+**应用前后对比**（左：应用前 · 右：应用后）：
+
+<p>
+  <img src="docs/img/compare-before.png" width="49%" alt="应用前">
+  <img src="docs/img/compare-after.png" width="49%" alt="应用后">
+</p>
+
 ## 工作原理
 
 ```
